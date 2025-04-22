@@ -1,0 +1,87 @@
+name: edt前端jiami3
+
+permissions:
+  contents: write
+
+on:
+  push:
+    paths:
+      - edt前端美化.js # 手动触发时的路径匹配
+  workflow_dispatch:
+
+jobs:
+  obfuscate_and_update_worker:
+    name: Obfuscate js2
+    runs-on: ubuntu-latest
+
+    env:
+      SOURCE_FILE: edt前端美化.js
+      OUTPUT_FILE: edt前端jiami3.js
+
+    steps:
+      # 步骤 1: 检出仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 步骤 2: 设置 Node.js 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      # 步骤 3: 安装混淆工具
+      - name: Install obfuscation tool
+        run: |
+          npm install -g javascript-obfuscator
+
+      # 步骤 4: 验证源文件是否存在
+      - name: Verify source file exists
+        run: |
+          if [ ! -f "$SOURCE_FILE" ]; then
+            echo "Error: Source file $SOURCE_FILE does not exist."
+            exit 1
+          fi
+
+      # 步骤 5: 混淆源文件
+      - name: Obfuscate ${{ env.SOURCE_FILE }}
+        run: |
+          OUTPUT_FILE=$(echo "$OUTPUT_FILE" | xargs) # 去除空格
+          javascript-obfuscator "$SOURCE_FILE" --output "$OUTPUT_FILE" \
+          --compact true \
+          --control-flow-flattening false \
+          --dead-code-injection true \
+          --dead-code-injection-threshold 0.5 \
+          --identifier-names-generator mangled \
+          --string-array true \
+          --string-array-encoding 'rc4' \
+          --string-array-threshold 0.75 \
+          --transform-object-keys true \
+          --unicode-escape-sequence false
+
+          if [ ! -f "$OUTPUT_FILE" ]; then
+            echo "错误: 混淆文件 $OUTPUT_FILE 不存在"
+            exit 1
+          else
+            echo "已生成混淆后的 $OUTPUT_FILE 文件"
+          fi
+
+      # 步骤 6: 检查 $OUTPUT_FILE 是否更新
+      - name: Check if ${{ env.OUTPUT_FILE }} is updated
+        run: |
+          echo "检查文件状态..."
+          git status
+          echo "列出文件详细信息..."
+          ls -l $OUTPUT_FILE
+
+      # 步骤 7: 提交并推送更改
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$OUTPUT_FILE"
+          if git diff --cached --quiet; then
+            echo "没有可提交的更改"
+          else
+            git commit -m "更新混淆后的 $OUTPUT_FILE 文件"
+            git push
+          fi
